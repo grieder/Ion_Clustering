@@ -9,6 +9,10 @@ from ase.neighborlist import neighbor_list as nl
 import matplotlib.pyplot as plt
 import time
 from ase import Atoms,Atom
+from scipy.linalg import norm
+import sys
+sys.path.append('/home/shared/Python_Scripts/lethal_lithium')
+from md_analysis import rotations
 
 def average_pos(cluster,a):
     ave_pos = np.zeros([3])
@@ -103,11 +107,6 @@ def make_cluster_traj(traj, clusters, out_name):
 
     ase.io.write(out_name,cluster_traj)
 
-from scipy.linalg import norm
-import sys
-sys.path.append('/home/shared/Python_Scripts/lethal_lithium')
-from md_analysis import rotations
-
 
 def cluster_lifetime(clusters,traj,similatiry_cut):
     ## Cluster changes overt time
@@ -191,6 +190,7 @@ def decay_calc(life_times,sim,min_cut):
 
 
 amor_smalldt_traj = ase.io.read('nvt.smalldt.xyz.xyz', index=':')
+
 for i in range(7,11):
     for j in range((i-3),(i+1)):
 
@@ -204,11 +204,3 @@ for i in range(7,11):
         
         cluster_ids, life_times, cluster_msd = cluster_lifetime(amor_smalldt_clusters,amor_smalldt_traj,similarity) 
         decay_calc(life_times,similarity,min_ions)
-        #fig, ax = plt.subplots()
-        #
-        #ax.hist(life_times, bins=25)
-        #ax.set_xlabel('Lifetime of Cluster (fs)')
-        #ax.set_ylabel('Counts')
-        #
-        ##plt.show()
-        #plt.savefig('cluster_hist_min{}_sim{}.png'.format(min_ions,similarity))
