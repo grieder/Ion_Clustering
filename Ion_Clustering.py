@@ -166,7 +166,18 @@ def count_Li_clusters(traj, cutoff, min_ions = 2,lattice_parameters=None):
 
     return np.asarray(n_clusters)
 
-def cluster_lifetime(clusters,similatiry_cut,time_step=1.0,continuous=False):
+def checkIfDuplicates(listOfElems):
+    ''' Check if given list contains any duplicates '''    
+    setOfElems = set()
+    elems = []
+    for elem in listOfElems:
+        if elem in setOfElems:
+            elems.append(elem)
+        else:
+            setOfElems.add(elem)         
+    return elems
+
+def cluster_lifetime(clusters,similatiry_cut, min_ions,time_step=1.0,continuous=False):
     """
     Calculate the lifetime of clusters.
     
@@ -204,7 +215,8 @@ def cluster_lifetime(clusters,similatiry_cut,time_step=1.0,continuous=False):
     # Get clusters from first frame
     frame_n = 0
     for i, cluster in enumerate(clusters[0,2]):
-        cluster_ids[i] = add_cluster(cluster,0)
+        if len(cluster) < min_ions:
+            cluster_ids[i] = add_cluster(cluster,0)
     
     # Starting with the second frame calculate 
     # how many frames the cluster exists
@@ -217,14 +229,20 @@ def cluster_lifetime(clusters,similatiry_cut,time_step=1.0,continuous=False):
         flat_ions = list(sum(frame, ()))
         n_repeats = len(flat_ions) - np.unique(flat_ions).shape[0]
         if n_repeats > 0:
-            print('Same ions in two clusters in frame {}\n{}'.format(f,frame))
+            elem = checkIfDuplicates(flat_ions)
+            print('Same ions {} in two clusters in frame {}\n{}'.format(elem,f))
             
         # For each cluster in the frame 
         # check the similatiry of clusters 
         # to previous clusters 
         for cluster in frame:
-            found = False
-            for c_ids in cluster_ids.keys():
+            if len(cluster) < min_ions:
+                found = True
+                continue
+            else:
+                found = False
+            current_ids = list(cluster_ids.keys())
+            for c_ids in current_ids:
                 similarity = set(cluster_ids[c_ids]['o_cluster']) & set(cluster)
                 
                 # If similare update lifetime info
@@ -236,6 +254,7 @@ def cluster_lifetime(clusters,similatiry_cut,time_step=1.0,continuous=False):
                             found = True
                             break
                         else:
+                            new_ids = np.max(list(cluster_ids.keys())) + 1
                             cluster_ids[new_ids] = add_cluster(cluster,f)
                             found = True
                     else:
@@ -257,10 +276,10 @@ def cluster_lifetime(clusters,similatiry_cut,time_step=1.0,continuous=False):
     return cluster_ids, life_times_list
 
 ## Choose number of ions to be considered a cluster
-min_ions = 8
+min_ions = 2
 
 ## Choose The number of ions in two clusters to be considers the same cluster 
-similarity = 7
+similarity = 3
 
 ## Choose distance cutoff used to make the transition matrix for Markov Clustering
 distance_cutoff = 4.0
@@ -270,10 +289,11 @@ lat_par = None
 #lat_par = [31.386271, 31.386271, 31.386271]
 
 ## Load trajectory
-traj_file_name = 'XDATCAR'
-traj = ase.io.read(traj_file_name,index=':')
+#traj_file_name = 'XDATCAR'
+traj_file_name = 'nvt_smalldt.xyz'
+traj = ase.io.read(traj_file_name,index='-2000:')
 
-np_clusters = 'clusters_min{}_dist{}.npy'.format(min_ions,similarity)
+np_clusters = 'clusters_min{}_dist{}.npy'.format(min_ions,distance_cutoff)
 
 if path.exists(np_clusters):
     print('Loaded')
@@ -288,7 +308,7 @@ else:
 ## Set timestep if not 1.0fs and set continuous to False 
 ## if you want lifetimes to include clusters that break up and reform
 continuous = True
-cluster_ids, life_times = cluster_lifetime(clusters, similarity, 
+cluster_ids, life_times = cluster_lifetime(clusters, similarity, 8 
                                            time_step=1.0, continuous=continuous)
 if continuous:
     name = 'Continuous'
@@ -300,5 +320,6 @@ ax.hist(life_times, bins=25, label=name)
 ax.set_xlabel('Lifetime of Cluster (fs)')
 ax.set_ylabel('Counts')
 ax.legend()
+#ax.set_ylim(0,50)
 plt.savefig('cluster_hist_min{}_sim{}_dist{}.png'.format(min_ions,similarity,distance_cutoff))
 
