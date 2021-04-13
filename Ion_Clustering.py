@@ -215,9 +215,8 @@ def cluster_lifetime(clusters,similatiry_cut, min_ions,time_step=1.0,continuous=
     # Get clusters from first frame
     frame_n = 0
     for i, cluster in enumerate(clusters[0,2]):
-        if len(cluster) < min_ions:
+        if len(cluster) >= min_ions:
             cluster_ids[i] = add_cluster(cluster,0)
-    
     # Starting with the second frame calculate 
     # how many frames the cluster exists
     for i,frame in enumerate(clusters[1:,2]):
@@ -230,7 +229,7 @@ def cluster_lifetime(clusters,similatiry_cut, min_ions,time_step=1.0,continuous=
         n_repeats = len(flat_ions) - np.unique(flat_ions).shape[0]
         if n_repeats > 0:
             elem = checkIfDuplicates(flat_ions)
-            print('Same ions {} in two clusters in frame {}\n{}'.format(elem,f))
+            print('Same ions {} in two clusters in frame {}\n{}'.format(elem,f,frame))
             
         # For each cluster in the frame 
         # check the similatiry of clusters 
@@ -276,10 +275,10 @@ def cluster_lifetime(clusters,similatiry_cut, min_ions,time_step=1.0,continuous=
     return cluster_ids, life_times_list
 
 ## Choose number of ions to be considered a cluster
-min_ions = 2
+min_ions = 8
 
 ## Choose The number of ions in two clusters to be considers the same cluster 
-similarity = 3
+similarity = 7
 
 ## Choose distance cutoff used to make the transition matrix for Markov Clustering
 distance_cutoff = 4.0
@@ -289,9 +288,8 @@ lat_par = None
 #lat_par = [31.386271, 31.386271, 31.386271]
 
 ## Load trajectory
-#traj_file_name = 'XDATCAR'
-traj_file_name = 'nvt_smalldt.xyz'
-traj = ase.io.read(traj_file_name,index='-2000:')
+traj_file_name = 'XDATCAR'
+#traj = ase.io.read(traj_file_name,index=':')
 
 np_clusters = 'clusters_min{}_dist{}.npy'.format(min_ions,distance_cutoff)
 
@@ -303,12 +301,13 @@ else:
     clusters = count_Li_clusters(traj, distance_cutoff,
                                  min_ions=min_ions,
                                  lattice_parameters = lat_par)
-    np.save(np_clusters, clusters)
+    #np.save(np_clusters, clusters)
 
 ## Set timestep if not 1.0fs and set continuous to False 
 ## if you want lifetimes to include clusters that break up and reform
-continuous = True
-cluster_ids, life_times = cluster_lifetime(clusters, similarity, 8 
+continuous = False
+
+cluster_ids, life_times = cluster_lifetime(clusters, similarity, min_ions, 
                                            time_step=1.0, continuous=continuous)
 if continuous:
     name = 'Continuous'
@@ -320,6 +319,7 @@ ax.hist(life_times, bins=25, label=name)
 ax.set_xlabel('Lifetime of Cluster (fs)')
 ax.set_ylabel('Counts')
 ax.legend()
+plt.tight_layout()
 #ax.set_ylim(0,50)
 plt.savefig('cluster_hist_min{}_sim{}_dist{}.png'.format(min_ions,similarity,distance_cutoff))
 
