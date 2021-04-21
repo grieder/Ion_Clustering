@@ -152,6 +152,11 @@ def count_Li_clusters(traj, cutoff, min_ions = 2,lattice_parameters=None):
         # Perform Markov Clustering
         clusters_t = markov_clustering(transition_matrix,pruning_threshold = 0.00001)
 
+        flat_ions = list(sum(clusters_t, ()))
+        n_repeats = len(flat_ions) - np.unique(flat_ions).shape[0]
+        if n_repeats > 0:
+            elem = checkIfDuplicates(flat_ions)
+            #print('Same ions {} in two clusters in frame'.format(elem))
         # Filter small clusters based on min_ions
         clusters = []
         for clust in clusters_t:
@@ -214,11 +219,14 @@ def cluster_lifetime(clusters,similatiry_cut, min_ions,time_step=1.0,continuous=
     
     # Get clusters from first frame
     frame_n = 0
+    added_clusters = 0
     for i, cluster in enumerate(clusters[0,2]):
         if len(cluster) >= min_ions:
+            added_clusters += 1
             cluster_ids[i] = add_cluster(cluster,0)
     # Starting with the second frame calculate 
     # how many frames the cluster exists
+    updated_cluster = 0
     for i,frame in enumerate(clusters[1:,2]):
         f = i + 1
         
@@ -244,7 +252,7 @@ def cluster_lifetime(clusters,similatiry_cut, min_ions,time_step=1.0,continuous=
             for c_ids in current_ids:
                 similarity = set(cluster_ids[c_ids]['o_cluster']) & set(cluster)
                 
-                # If similare update lifetime info
+                # If similar update lifetime info
                 if len(similarity) >= similatiry_cut:
                     if continuous:
                         if i == cluster_ids[c_ids]['end']:
@@ -260,23 +268,34 @@ def cluster_lifetime(clusters,similatiry_cut, min_ions,time_step=1.0,continuous=
                         cluster_ids[c_ids] = update_cluster(cluster_ids[c_ids],
                                                             cluster)
                         found = True
+                        updated_cluster += 1
                         break
+                # Remove old clusters form dictionary    
+                if continuous:
+                    if i != cluster_ids[c_ids]['end']: 
+                        life_times_list.append(cluster_ids[c_ids]['len'] * time_step)
+                        del(cluster_ids[c_ids])
+
             # If not similar to other cluseter add new cluster to dict
             if not found:
-                new_ids = np.max(list(cluster_ids.keys())) + 1
+                new_ids = np.max(current_ids) + 1
                 cluster_ids[new_ids] = add_cluster(cluster,f)
-                
+                added_clusters += 1
     # Make list of lifetimes for ease later
     # and change 'len' from number of number of frames to time
     for c_ids in cluster_ids.keys():
         cluster_ids[c_ids]['len'] *= time_step
         life_times_list.append(cluster_ids[c_ids]['len'])
-        
+    print('Added Clusters = {}'.format(added_clusters))
+    print('Updated Clusters = {}'.format(updated_cluster))
     return cluster_ids, life_times_list
 
+## Load trajectory
+#traj_file_name = 'XDATCAR'
+traj_file_name = 'nvt_smalldt.xyz'
+traj = ase.io.read(traj_file_name,index=':')
 ## Choose number of ions to be considered a cluster
 min_ions = 8
-
 ## Choose The number of ions in two clusters to be considers the same cluster 
 similarity = 7
 
@@ -287,9 +306,6 @@ distance_cutoff = 4.0
 lat_par = None
 #lat_par = [31.386271, 31.386271, 31.386271]
 
-## Load trajectory
-traj_file_name = 'XDATCAR'
-#traj = ase.io.read(traj_file_name,index=':')
 
 np_clusters = 'clusters_min{}_dist{}.npy'.format(min_ions,distance_cutoff)
 
@@ -301,11 +317,11 @@ else:
     clusters = count_Li_clusters(traj, distance_cutoff,
                                  min_ions=min_ions,
                                  lattice_parameters = lat_par)
-    #np.save(np_clusters, clusters)
+    np.save(np_clusters, clusters)
 
 ## Set timestep if not 1.0fs and set continuous to False 
 ## if you want lifetimes to include clusters that break up and reform
-continuous = False
+continuous = True
 
 cluster_ids, life_times = cluster_lifetime(clusters, similarity, min_ions, 
                                            time_step=1.0, continuous=continuous)
@@ -313,9 +329,9 @@ if continuous:
     name = 'Continuous'
 else:
     name = 'Intermittent'
-
 fig, ax = plt.subplots()
-ax.hist(life_times, bins=25, label=name)
+bins = np.linspace(2,np.max(life_times), 25, endpoint=True)
+binsedge = ax.hist(life_times, bins=bins, label=name)
 ax.set_xlabel('Lifetime of Cluster (fs)')
 ax.set_ylabel('Counts')
 ax.legend()
